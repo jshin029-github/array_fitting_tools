@@ -16,6 +16,8 @@ Returns:
 fmaxDistObject :
 """
 import argparse
+import matplotlib
+matplotlib.use('Agg')
 import sys
 import os
 import numpy as np
@@ -30,9 +32,9 @@ from fittinglibs import (fitting, plotting, fileio, processing, distribution, in
 
 
 
-parser = argparse.ArgumentParser(description='bootstrap fits')
+parser = argparse.ArgumentParser(description='bootstrap fits : Modified by Rohit Roy - March 2021')
 processing.add_common_args(parser.add_argument_group('common arguments'),
-                           required_f=True, required_a=True, required_x=True)
+                           required_f=True, required_a=True, required_x=False)
 
 group = parser.add_argument_group('additional option arguments')
 
@@ -45,7 +47,8 @@ group.add_argument('--use_simulated', type=int,
                    help='set to 0 or 1 if you want to use simulated distribution (1) or'
                    'not (0). Otherwise program will decide.')
 group.add_argument('--filterfun', default='default_filter', help='name of function in "ftilerfunctions" used to decide whether single cluster fit is good.')
-
+group.add_argument('-fb', '--fraction_bound', type=float, default = 0.95,
+                   help='fraction bound at highest concentration to be used to get Kd Cutoff')
 
 
 def useSimulatedOrActual(variant_table, cutoff):
@@ -93,7 +96,7 @@ if __name__=="__main__":
         # adjust cutoff to reflect this fraction bound at last concentration
         affinity_cutoff = parameters.find_dG_from_Kd(kd_cutoff)
     else:
-        min_frac_bound = 0.95
+        min_frac_bound = args.fraction_bound
         affinity_cutoff = parameters.find_dG_from_frac_bound(min_frac_bound, concentrations.max())
     pvalue_cutoff = args.pvalue_cutoff
     logging.info('Using variants with kd less than %4.2f nM'%parameters.find_Kd_from_dG(affinity_cutoff))

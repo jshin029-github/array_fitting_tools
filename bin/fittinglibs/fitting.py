@@ -1,6 +1,8 @@
 from lmfit import minimize, Parameters, report_fit, conf_interval
 import numpy as np
 import pandas as pd
+import matplotlib
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sys
@@ -425,14 +427,16 @@ def perVariant(variantParams, variant, n_samples=100, enforce_fmax=None, weighte
     time_diff = (t1 - t0).total_seconds()
     return variantParams.results
 
-def fitSetVariants(variantParams, variants=None,  n_samples=100, enforce_fmax=None, weighted_fit=True, min_error=0, func_kwargs={}, print_bool=True, return_time=False):
-    """Fit a set of variants to objective function by bootstrapping median fluorescence."""
+def fitSetVariants(variantParams, variants=None,  n_samples=100, enforce_fmax=None, weighted_fit=True, min_error=0, func_kwargs={}, print_bool=True, return_time=False,bs_dGs_path=None):
+    """Fit a set of variants to objective function by bootstrapping median fluorescence.
+    05132022 edit (John Shin) - add option to save bs dGs (bs_dGs_path)"""
     t0 = datetime.datetime.now()
     results = variantParams.fit_binding_curves_all(variants, n_samples=n_samples,
                                                    weighted_fit=weighted_fit,
                                                    enforce_fmax=enforce_fmax,
                                                     print_bool=print_bool,
-                                         return_results=True)
+                                         return_results=True,
+                                         bs_dGs_path=bs_dGs_path)
     t1 = datetime.datetime.now()
     time_diff = (t1 - t0).total_seconds()
     if return_time:

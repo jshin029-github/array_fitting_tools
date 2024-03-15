@@ -19,17 +19,23 @@ import argparse
 import itertools
 import subprocess
 import numpy as np
+import pandas as pd
 import gzip
 #from skbio.alignment import global_pairwise_align_nucleotide
 #from skbio import DNA
 from Bio import SeqIO
-from fittinglibs import fileio, seqfun
+import nwalign as nw
+from fittinglibs import fileio
 
 ##### define parameters for alignment #####
 numRecordsPerLine = 4 # for fastq files
 rnapInitSeq = 'TTTATGCTATAATTATTTCATGTAGTAAGGAGGTTGTATGGAAGACGTTCCTGGATCC'
-pValueCutoff = 1E-6
-
+pValueCutoff = 1E-4
+gapPenalty = 8
+gapExtension = 0
+scoringMatrix = "NUC.4.4"
+if not os.path.exists('NUC.4.4'):
+    subprocess.check_call('wget "ftp://ftp.ncbi.nih.gov/blast/matrices/NUC.4.4"', shell=True)
 
 def phredStr(phredArray):
     if all(x == 0 for x in phredArray):
@@ -68,17 +74,19 @@ def getTempFilename(fullPath): #appends a prefix to the filename to indicate the
     (path,filename) = os.path.split(fullPath) #split the file into parts
     return os.path.join(path,'__' + filename)
 
+def getScorePvalue(nwScore, m, n, k=0.0097, l=0.5735, nwScoreScale=0.2773):
+    """Ge pvalue of extreme value distribution which model's likelihood of achieveng a more extreme
+    alignment score for two sequences of length m and n. K and l are empirically determined.
+    nwScoreScale is a factor applied to scores of NUC4.4 matrices (from MATLAB nwalign)"""
+    u = np.log(k*m*n)/l
+    score = nwScore*nwScoreScale
+    return (1 - np.exp(-np.exp(-l*(score-u))))
+
 def getNumLinesInFile(filename):
     n_lines = 0
     with gzip.open(filename, 'rb') as f:
         for line in f: n_lines += 1
     return n_lines
-
-def getAlignmentPvalue(seq):
-    seq1, seq2 = nw.global_align(seq, rnapInitSeq, gap_open=-gapPenalty, gap_extend=-gapExtension, matrix=scoringMatrix)
-    score = nw.score_alignment(seq1, seq2, gap_open=-gapPenalty,  gap_extend=-gapExtension, matrix=scoringMatrix)
-    pvalue = getScorePvalue(score, len(seq), len(rnapInitSeq))
-    return pvalue
 
 ### MAIN ###
 if __name__=='__main__':
@@ -89,7 +97,7 @@ if __name__=='__main__':
     parser.add_argument('-r1','--read1', help='read 1 fastq filename', )
     parser.add_argument('-r2','--read2', help='read 2 fastq filename (gzipped)', )
     parser.add_argument('-rd','--read_dir', help='path to folder containing read 1 and read2 fastq filenames', )
-    parser.add_argument('-o','--output', help='output filename (.CPseq)')
+    parser.add_argument('-o','--output', help='output filename (.CPseq.gz)')
     parser.add_argument('--nofilter', action="store_true",
                         help='flag if you do not wish to perform any alignment (~2x speed gain)')
 
@@ -103,19 +111,18 @@ if __name__=='__main__':
     if args.read1 is not None and args.read2 is not None:
         read1Filenames = [args.read1]
         read2Filenames = [args.read2]
-        outputFilename = fileio.stripExtension(args.read1).replace('_R1', '') + '.CPseq'
+        outputFilename = fileio.stripExtension(args.read1).replace('_R1', '') + '.CPseq.gz'
     else:
         read1Filenames = subprocess.check_output(
             ('find %s -mindepth 1 -maxdepth 1 -type f -name "*R1*fastq.gz"')%
             args.read_dir, shell=True).strip().split()
         read2Filenames = [filename.replace('_R1_', '_R2_') for filename in read1Filenames]
-        outputFilename = os.path.join(args.read_dir, 'allfastqs.CPseq')
+        outputFilename = os.path.join(args.read_dir, 'allfastqs.CPseq.gz')
 
     #check output filename
     if args.output is not None:
         outputFilename = args.output
-    
-    # download scoring matrix if itdoesn't exist
+
     outputFilenames = {}
     for j, (read1Filename, read2Filename) in enumerate(zip(read1Filenames, read2Filenames)):
         # open input files
@@ -137,6 +144,7 @@ if __name__=='__main__':
         # iterate through all entries in lockstep
         numRecords = getNumLinesInFile(read1Filename)/numRecordsPerLine
         
+        data = {}
         with gzip.open(currTempFilename, 'ab') as outputFileHandle:
             for i, (currRead1Record,currRead2Record) in enumerate(itertools.izip(
                 SeqIO.parse(read1Handle, 'fastq'),
@@ -160,8 +168,10 @@ if __name__=='__main__':
                         # do an nw alignment of the RNAP init sequence to the read1 sequence
                         # if they align, then this sequence will be transcribed
                         seq = str(currRead1Record.seq)
-                        seq1, seq2, pvalue =  seqfun.align_seqs(seq, rnapInitSeq)
-                        
+                        seq1, seq2 = nw.global_align(seq, rnapInitSeq, gap_open=-gapPenalty, gap_extend=-gapExtension, matrix=scoringMatrix)
+                        score = nw.score_alignment(seq1, seq2, gap_open=-gapPenalty,  gap_extend=-gapExtension, matrix=scoringMatrix)
+                        pvalue = getScorePvalue(score, len(seq), len(rnapInitSeq))
+                        data[i] = pd.Series({'seq':seq, 'score':score, 'pvalue':pvalue})
                         # add tag to filter column
                         if pvalue < pValueCutoff:
                             cl.filterID = 'anyRNA'
@@ -192,11 +202,10 @@ if __name__=='__main__':
     print 'Making final output file: "' + outputFilename + '"...'
     if len(read1Filenames)==1:
         # don't unzip and rezip in this case (faster)
-        os.rename(outputFilenames[0], outputFilename + '.gz')
-        subprocess.check_call(['gunzip', outputFilename + '.gz'])
+        os.rename(outputFilenames[0], outputFilename)
     else:
         
-        call = 'zcat %s  > %s'%(' '.join(outputFilenames.values()), outputFilename)
+        call = 'zcat %s | gzip > %s'%(' '.join(outputFilenames.values()), outputFilename)
         subprocess.check_call('zcat %s | gzip > %s'%(' '.join(outputFilenames.values()), outputFilename),
                               shell=True)
         # remove individual outputs

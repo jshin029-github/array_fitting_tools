@@ -6,6 +6,8 @@ import subprocess
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 import datetime
 import scipy.stats as st
 import warnings

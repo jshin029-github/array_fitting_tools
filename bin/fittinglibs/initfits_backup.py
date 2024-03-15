@@ -171,10 +171,8 @@ class MoreFitParams():
                 return pd.DataFrame(columns=self.binding_series_dict.columns)
                 
 
-    def fit_set_binding_curves(self, idx, enforce_fmax=None, weighted_fit=True, n_samples=100, return_results=False, use_initial=False, bs_dGs_path=False):
-        """Fit a set of y values to a curve.
-        05132022 edit (John Shin) - add option to save bs dGs (bs_dGs_path)
-        """
+    def fit_set_binding_curves(self, idx, enforce_fmax=None, weighted_fit=True, n_samples=100, return_results=False, use_initial=False):
+        """Fit a set of y values to a curve."""
         x = self.fitParams.x
         ys = self.get_ys(idx)        
         y = ys.median()
@@ -231,16 +229,6 @@ class MoreFitParams():
             singles.append(results)
         singles = pd.concat(singles, axis=1).transpose()
 
-
-        ## John edits
-        if bs_dGs_path:
-            singles.to_csv(bs_dGs_path+str(idx)+"_singles.csv", sep="\t", index=False)
-
-        # uncomment for debugging
-        # else:
-        #     singles.to_csv("test_singles.csv", sep="\t", index=False)
-        ## end John edits
-
         # find upper and lower bounds from results
         sub_param_names = [key  for key in param_names if fit_parameters[key]['vary']] # because you want to include ub and lb of fmax
         results = fitting.findProcessedSingles(singles, sub_param_names)
@@ -249,22 +237,9 @@ class MoreFitParams():
         for key in param_names:
             results.loc['%s_init'%key] = initial_points.loc[key]
         
-
-        ####### debug
         # find rsq of median
-        try:
-            ypred = pd.Series(self.fitParams.func(_get_params_from_results(results, param_names), x), index=y.index)
-        except:
-            print idx
-            print results
-            print param_names
-            print initial_points
-
-        ####### debug
-
-
+        ypred = pd.Series(self.fitParams.func(_get_params_from_results(results, param_names), x), index=y.index)
         ypred_init = pd.Series(self.fitParams.func(_get_params_from_results(initial_points, param_names), x), index=y.index)
-
 
         results.loc['rsq']      = get_r2_score(y, ypred)
         results.loc['rsq_init'] = get_r2_score(y, ypred_init)
@@ -282,10 +257,8 @@ class MoreFitParams():
         self.results = results
         self.ys = ys
     
-    def fit_binding_curves_all(self, variants=None, enforce_fmax=None, weighted_fit=True, n_samples=100, print_bool=True, return_results=False,bs_dGs_path=None):
-        """Fit a set of variants to curves with bootstrapping method.
-
-        05132022 edit (John Shin) - add option to save bs dGs (bs_dGs_path)"""
+    def fit_binding_curves_all(self, variants=None, enforce_fmax=None, weighted_fit=True, n_samples=100, print_bool=True, return_results=False):
+        """Fit a set of variants to curves with bootstrapping method."""
         if variants is None:
             variants = self.variants
         results = {}
@@ -305,18 +278,12 @@ class MoreFitParams():
                                                        enforce_fmax=enforce_fmax,
                                                        weighted_fit=weighted_fit,
                                                        n_samples=n_samples,
-                                                       return_results=True,
-                                                       bs_dGs_path = bs_dGs_path
-                                                       )[0]
+                                                       return_results=True)[0]
             if vec is not None:
                 # don't include None
                 results[idx] = vec
 
-        if len(results) > 0:
-            results = pd.concat(results).unstack()
-        else:
-            results = pd.DataFrame(index=results.keys())
-
+        results = pd.concat(results).unstack()
         if return_results:
             return results
         
@@ -413,15 +380,7 @@ def _get_params_from_results(results, param_names, rename_param_names=None):
     if rename_param_names is None: rename_param_names = param_names
     params = Parameters()
     for param, rename_param in zip(param_names, rename_param_names):
-        ### Debugging by John 02142023
-        # params.add(rename_param, value=results.loc[param])
-
-        if param in results.index:
-            params.add(rename_param, value=results.loc[param])
-        else:
-            params.add(rename_param, value=np.NaN)
-
-        ### end edits
+        params.add(rename_param, value=results.loc[param])
     return params
 
 def _get_init_params(fit_parameters):

@@ -11,6 +11,8 @@ import ipdb
 import os
 import scipy.stats as st
 import matplotlib as mpl
+import matplotlib
+matplotlib.use('Agg')
 from fittinglibs import plotting, fitting, distribution
 from plotting import fix_axes
 import ipdb

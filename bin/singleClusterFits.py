@@ -25,7 +25,7 @@ import scipy.stats as st
 from joblib import Parallel, delayed
 import lmfit
 import logging
-from fittinglibs import (plotting, fitting, fileio, seqfun, distribution, objfunctions, initfits, processing)
+from fittinglibs import (fitting, fileio, seqfun, distribution, objfunctions, initfits, processing)
 
 ### MAIN ###
 
@@ -92,10 +92,25 @@ if __name__=="__main__":
         else:
             args.out_file = basename + '.CPfitted.gz'
 
+    # Begin John edits 9/20/2021
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler('logging/singleClusterFits.log')
+    file_handler.setLevel(logging.INFO)
+
+    logger.addHandler(file_handler)
+    # End John edits
+
     # load files
     logging.info("Loading binding series...")
     xvalues = np.loadtxt(args.xvalues)
     bindingSeries = fileio.loadFile(args.binding_series)  
+
+    # John edits 5/9/2023
+    bindginSeries = bindingSeries.drop_duplicates()
+    # end edits
+
     min_xval_col = pd.Series(xvalues, index=bindingSeries.columns).idxmin()
     
     # Initialize the fit parameters class.

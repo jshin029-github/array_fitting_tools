@@ -14,6 +14,8 @@
 # Aug 2016
 
 ##### IMPORT #####
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 import pandas as pd
 import sys
@@ -25,7 +27,7 @@ import scipy.stats as st
 from joblib import Parallel, delayed
 import lmfit
 import itertools
-import ipdb
+#import ipdb
 from fittinglibs import fitting, plotting, fileio, distribution, variables, initfits, processing
 
 
@@ -52,6 +54,11 @@ group.add_argument('--variants',
                     help='fit only variants listed in this text file')
 group.add_argument('--no_weights',action="store_true", default=False,
                     help="if flagged, won't weight the fit by error bars on median fluorescence")
+group.add_argument('--bs_dGs_path', default=False,
+                    help="if specified, all of the bootstrapped fits will be stored in the bs_dGs_path directory")
+
+
+
 
 group = parser.add_argument_group('arguments about fitting function')
 group.add_argument('--func', default = 'binding_curve',
@@ -149,6 +156,10 @@ if __name__ == '__main__':
     n_samples = args.n_samples
     numCores = args.numCores
     outFile  = args.out_file
+
+    # John edits
+    bs_dGs_path = args.bs_dGs_path
+    # end John edits
     
     enforce_fmax = args.enforce_fmax
     concentrations = np.loadtxt(args.xvalues)
@@ -181,7 +192,7 @@ if __name__ == '__main__':
     # process bindign series into per-variant dict
     bindingSeriesDict = makeGroupDict(bindingSeries, annotatedClusters)
     medianBindingSeries = bindingSeriesDict.groupby(level=0).median()
-    
+
     # find initial points
     #initialPoints = findInitialPoints(variantTable, bindingSeriesDict.keys())
     
@@ -211,18 +222,22 @@ if __name__ == '__main__':
                                                  binding_series_dict=bindingSeriesDict.loc[variantSet],
                                                  fmax_dist_obj=fmaxDistObject)
                           for variantSet in variantsSplit]
+
     printBools = [True] + [False]*(numCores-1)
 
     print '\tMultiprocessing bootstrapping...'
 
     # parallelize fitting
+    # John edits
     results = (Parallel(n_jobs=numCores, verbose=10)
                 (delayed(fitting.fitSetVariants)(variantParams,
                                         n_samples=n_samples,
                                         enforce_fmax=enforce_fmax,
                                         weighted_fit=weighted_fit,
+                                        bs_dGs_path=bs_dGs_path,
                                         print_bool=printbool)
                  for variantParams, printbool  in zip(variantParamsSplit, printBools)))      
+    # end John edits
      
     results = pd.concat(results).sort_index()
 

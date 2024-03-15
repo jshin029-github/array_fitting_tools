@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+#
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ATTENTION !!!!!!!!!!!!!!!!!!!!!!!!!
+#	This is a modified version of the original script modified
+#	by Rohit Roy, this script uses a preassigned tab separated
+#	csv file of fields 'barcode', 'variant' instead and performs
+#	no barcode assignment itself. Modified in March - 2021
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # 
 # Given a list of designed variants, and a CPsignal file you wish to fit,
 # annotate each of the clusters in cPsignal file with variant information.
@@ -11,6 +18,8 @@
 # Sarah Denny
 
 ##### IMPORT #####
+import matplotlib as mpl
+mpl.use('Agg')
 import numpy as np
 import pandas as pd
 import sys
@@ -26,17 +35,19 @@ from fittinglibs import fileio, seqfun
 ################ Parse input parameters ################
 
 #set up command line argument parser
-parser = argparse.ArgumentParser(description='map variants to sequence')
-parser.add_argument('-lc', '--library_characterization', required=True,
+parser = argparse.ArgumentParser(description='map variants to sequence - !!! MODIFIED by Rohit Roy - March 2021: uses preassigned barcode files')
+parser.add_argument('-lc', '--library_characterization',
                    help='file that lists unique variant sequences')
 parser.add_argument('-out', '--out_file', 
                    help='output filename')
 parser.add_argument('-cs', '--cpseq', required=True,
                    help='reduced CPseq file containing sequence information.')
-parser.add_argument('-bar', '--unique_barcodes', required=True,
+parser.add_argument('-bar', '--unique_barcodes', 
                    help='barcode map file. if given, the variant sequences are '
                    'mapped to the barcode rather than directly on to the sequence data')
 
+parser.add_argument('-prebar', '--preassigned_unique_barcodes', required=True,
+                   help='csv file of barcodes preassigned to library variants')
 
 group = parser.add_argument_group('additional option arguments to map variants')
 group.add_argument('--barcodeCol', default='index1_seq',
@@ -73,7 +84,7 @@ def findSequenceRepresentation(consensus_sequences, compare_to, exact_match=Fals
     # cycle through designed sequences. Find if they are in the actual sequences
     for i, (idx, sequence) in enumerate(compare_to.iteritems()):
         if i%1000==0:
-            print "checking %dth sequence"%i
+            print("checking %dth sequence"%i)
         
         # whether the sequence (designed) is in the actual sequence, given by the fastq
         in_fastq = True
@@ -124,43 +135,54 @@ if __name__ == '__main__':
         args.out_file = fileio.stripExtension(args.cpseq) + '.CPannot.gz'
         
     # load consensus seqs of UMI
-    consensus_seqs = fileio.loadFile(args.unique_barcodes).set_index('barcode').sequence.sort_values()
-    read_length = consensus_seqs.str.len().value_counts().index.tolist()[0] # mode of all
+    #consensus_seqs = fileio.loadFile(args.unique_barcodes).set_index('barcode').sequence.sort_values()
+    #read_length = consensus_seqs.str.len().value_counts().index.tolist()[0] # mode of all
     
     # load designed sequences, make  sequences unique
-    lib_char = fileio.loadFile(args.library_characterization)
-    designed_sequences, unique_indices = np.unique(lib_char.sequence, return_index=True)
+    #lib_char = fileio.loadFile(args.library_characterization)
+    #designed_sequences, unique_indices = np.unique(lib_char.sequence, return_index=True)
     
     # assign unique sequences
-    lib_char.index.name = 'variant_number'
-    lib_char_unique = lib_char.reset_index().groupby('sequence').first().reset_index().set_index('variant_number')
-    print "reduced library size from %d to %d after unique filter"%(len(lib_char), len(lib_char_unique))
+    #lib_char.index.name = 'variant_number'
+    #lib_char_unique = lib_char.reset_index().groupby('sequence').first().reset_index().set_index('variant_number')
+    #print ("reduced library size from %d to %d after unique filter"%(len(lib_char), len(lib_char_unique)))
     
     # make sure the length is less than the read length
-    lib_char_trimmed = lib_char_unique.loc[lib_char_unique.sequence.str.len() <= read_length].copy()
-    print "reduced library size from %d to %d after trimming for read length"%(len(lib_char_unique), len(lib_char_trimmed))
+    #lib_char_trimmed = lib_char_unique.loc[lib_char_unique.sequence.str.len() <= read_length].copy()
+    #print ("reduced library size from %d to %d after trimming for read length"%(len(lib_char_unique), len(lib_char_trimmed)))
 
     # take the reverse complement of the designed sequences, as we are comparing to read2
-    lib_char_trimmed.loc[:, 'rc_sequence_trunc'] = (
-        [seqfun.reverseComplement(sequence)[:read_length]
-         for sequence in lib_char_trimmed.sequence])
+    #lib_char_trimmed.loc[:, 'rc_sequence_trunc'] = (
+    #    [seqfun.reverseComplement(sequence)[:read_length]
+    #     for sequence in lib_char_trimmed.sequence])
+    #lc = lib_char_trimmed.rc_sequence_trunc
+    #lc.to_csv('libchar.csv', sep=',')
+    #consensus_seqs.to_csv('consensus.csv', sep=',')
     
     # assign each row in consensus seqs to a variant in lib_char_trimmed
-    num_bc_per_variant, umi_designed_variant = findSequenceRepresentation(
-        consensus_seqs, lib_char_trimmed.rc_sequence_trunc)
+    #num_bc_per_variant, umi_designed_variant = findSequenceRepresentation(
+    #    consensus_seqs, lib_char_trimmed.rc_sequence_trunc)
+    #umi_designed_variant.to_csv('barcode-to-variant.csv', sep=',')
+
+    # Instead of doing assignments like Sarrah does, use pre assigned barcoode csv file instead:
+    bc = pd.read_csv(args.preassigned_unique_barcodes, sep="\t")
+    #print "Initial list of sequences = ", bc.shape[0]
+    #bc = bc.drop_duplicates(subset = ['sequence'])
+    #print "After trimming out duplicate sequences = ", bc.shape[0]
+    variants = list(bc['variant'])
+    barcodes = list(bc['barcode'])
+    umi_designed_variant = pd.Series(variants, index=barcodes)
     
     # assign each row in cpseq file to a variant
-    print "mapping variant ids to cluster id through UMI..."
+    print("mapping variant ids to cluster id through UMI...")
     sequence_data = fileio.loadFile(args.cpseq)
-    print "\tfinding subset of clusters with UMI..."
+    print("\tfinding subset of clusters with UMI...")
     cluster_to_umi = sequence_data.loc[np.in1d(sequence_data.loc[:, args.barcodeCol].tolist(), umi_designed_variant.index.tolist()),  args.barcodeCol].copy()
-    print "\tmapping clusters to variant..."
+    
+    # Issue in this step: error somethings not indexed right in umi_designed_variant
+    print("\tmapping clusters to variant...")
     cluster_to_variant = pd.Series(umi_designed_variant.loc[cluster_to_umi].values, index=cluster_to_umi.index)
-    print "\tSaving..."
+    print("\tSaving...")
     annotated_clusters = pd.DataFrame(cluster_to_variant.loc[sequence_data.index].rename('variant_number'))
     annotated_clusters.to_csv(args.out_file, sep='\t', compression='gzip')
-    
 
-
-
- 

@@ -3,6 +3,8 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 import seaborn as sns
 from scikits.bootstrap import bootstrap
 from statsmodels.distributions.empirical_distribution import ECDF

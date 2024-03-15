@@ -1,6 +1,8 @@
 import numpy as np
 import scipy.stats as st
 import pandas as pd
+import os
+import nwalign as nw
 
 
 def reverseComplement(seq, rna=None):
@@ -179,3 +181,29 @@ def transform_data(data, loadings, scale_params=None):
     transformed.columns = ['pc_%d'%i for i in np.arange(transformed.shape[1])]
     return transformed
 
+def align_seqs(seq1, seq2, gap_penalty=8, gap_extension=0, scoring_matrix='NUC.4.4', print_output=False):
+    """Align two seqs"""
+
+    if not os.path.exists('NUC.4.4'):
+        subprocess.check_call('wget "ftp://ftp.ncbi.nih.gov/blast/matrices/NUC.4.4"', shell=True)
+
+    # if they align, then this sequence will be transcribed
+
+    alignedseq1, alignedseq2 = nw.global_align(seq1, seq2, gap_open=-gap_penalty, gap_extend=-gap_extension, matrix=scoring_matrix)
+    score = nw.score_alignment(alignedseq1, alignedseq2, gap_open=-gap_penalty,  gap_extend=-gap_extension, matrix=scoring_matrix)
+    pvalue = getScorePvalue(score, len(seq1), len(seq2))
+    
+    if print_output:
+        print '%s\n%s'%(alignedseq1, alignedseq2)
+        print 'score: %4.0f'%score
+        print 'pvalue: %.2e'%pvalue
+        
+    return alignedseq1, alignedseq2, pvalue
+    
+def getScorePvalue(nwScore, m, n, k=0.0097, l=0.5735, nwScoreScale=0.2773):
+    """Ge pvalue of extreme value distribution which model's likelihood of achieveng a more extreme
+    alignment score for two sequences of length m and n. K and l are empirically determined.
+    nwScoreScale is a factor applied to scores of NUC4.4 matrices (from MATLAB nwalign)"""
+    u = np.log(k*m*n)/l
+    score = nwScore*nwScoreScale
+    return (1 - np.exp(-np.exp(-l*(score-u))))

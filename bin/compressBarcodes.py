@@ -105,13 +105,14 @@ if __name__ == "__main__":
     
     args.colBarcode = args.colBarcode-1
     args.colTarget = args.colTarget-1
-
+    
     # sort CPseq and filter again
     if not args.sorted:
         print "Sorting input CPseq file..."
         newInFile = fileio.stripExtension(args.inFile) + '_sort.CPseq.gz'
-        inFile = pd.read_table(args.inFile, header=None)
-        inFile.dropna(subset=[args.colBarcode]).sort_values(args.colBarcode).to_csv(newInFile, sep='\t', header=False, index=False, compression='gzip')
+        inData = pd.read_table(args.inFile, header=None)
+        (inData.dropna(subset=[args.colBarcode]).sort_values(args.colBarcode).
+         to_csv(newInFile, sep='\t', header=False, index=False, compression='gzip'))
         args.inFile = newInFile
         
     print "Compressing barcodes..."
@@ -246,7 +247,7 @@ if __name__ == "__main__":
                              usecols=range(4)+[6])
 
     # another way
-    p = 0.25
+    p = 0.5
     for n in np.unique(barcodes.clusters_per_barcode):
         # do one tailed t test
         x = (barcodes.clusters_per_barcode*barcodes.fraction_consensus).loc[barcodes.clusters_per_barcode==n]

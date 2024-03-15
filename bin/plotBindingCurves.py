@@ -51,6 +51,8 @@ group.add_argument('--func', default='binding_curve',
 group = parser.add_argument_group(description='Optional additional arguments.')
 group.add_argument('-out', '--out_dir', default='./',
                    help='output directory. default is current directory')
+group.add_argument('-ex', '--extension', default='pdf',
+        help='Extension for output plots: pdf(default) or png')
 group.add_argument('--annotate', action="store_true",
                    help='flag if you want the plot annotated')
 group.add_argument('--plotinit', action="store_true",
@@ -62,13 +64,14 @@ group.add_argument('--fmaxdist',
 
 def make_plot(variantParams, idx, annotate=False, plotinit=False):
     """Make the binding series plot."""
-    plt.figure(figsize=(3,3)); plt.xscale('log')
+    plt.figure(figsize=(8,8)); plt.xscale('log')
     variantParams.plot_specific_binding_curve(idx, annotate=annotate)
     plt.xlabel('concentration')
     plt.ylabel('fluoresence')
     plt.subplots_adjust(left=0.25, bottom=0.2, right=0.95, top=0.95)
     plotting.fix_axes(plt.gca())
     
+    plt.ylim([0, 3])
     if plotinit:
         try:
             variantParams.plot_init_binding_curves(variantParams.results_all.loc[idx])
@@ -114,6 +117,6 @@ if __name__ == '__main__':
         except ValueError:
             pass
         
-        out_file = os.path.join(args.out_dir, 'binding_curve.%s.pdf'%str(idx))
+        out_file = os.path.join(args.out_dir, 'binding_curve.%s.%s'%(str(idx), args.extension))
         make_plot(variantParams, idx, annotate=args.annotate, plotinit=args.plotinit)
         plt.savefig(out_file)   
